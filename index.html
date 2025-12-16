@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>香港的士站位置地圖</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Awesome Icon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        .element-hidden {
+            display: none!important;
+        }
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            min-height: 100vh;
+            padding: 16px;
+            color: #1f2937;
+        }
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 100vh;
+        }
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(12px);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .header h1 {
+            color: #111827;
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header .subtitle {
+            color: #6b7280;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+        /* Main Content - Single Column for Map */
+        .main-content {
+            flex: 1;
+        }
+        /* Map Section */
+        .map-container {
+            height: 73vh !important;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            border-radius: 16px;
+        }
+        /* Map Control Panel (top-left) */
+        .map-control-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 300px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .panel-title {
+            color: #111827;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        /* 統一摺疊圖標樣式 */
+        .panel-title .instructions-collapse,
+        .panel-title .scope-info-collapse {
+            color: #4f46e5;
+            font-size: 0.9rem;
+            transition: transform 0.3s ease;
+        }
+        .panel-title .instructions-collapse.collapsed,
+        .panel-title .scope-info-collapse.collapsed {
+            transform: rotate(-90deg);
+        }
+        /* Instructions */
+        .instructions {
+            background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%);
+            padding: 16px;
+            border-radius: 10px;
+            border-left: 4px solid #4f46e5;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin-bottom 0.3s ease;
+        }
+        .instructions.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            padding: 0;
+            border: none;
+        }
+        .instructions p {
+            margin-bottom: 10px;
+            color: #374151;
+            line-height: 1.5;
+            font-size: 0.9rem;
+            position: relative;
+            padding-left: 18px;
+        }
+        .instructions p:last-child {
+            margin-bottom: 0;
+        }
+        .instructions p::before {
+            content: "•";
+            color: #4f46e5;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        /* Taxi Stands Info */
+        .taxi-stands-info {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+            animation: fadeIn 0.3s ease-out;
+            min-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin-bottom 0.3s ease;
+            margin-bottom: 20px;
+        }
+        .taxi-stands-info.collapsed {
+            max-height: 0;
+            min-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            padding: 0;
+            border: none;
+            overflow: hidden;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .taxi-stands-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .taxi-stands-title::before {
+            content: "🚕";
+            font-size: 1.1rem;
+        }
+        .stands-count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 15px 0;
+            color: #fbbf24;
+        }
+        .stands-details {
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .stands-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            min-width: 80px;
+        }
+        .stat-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #fbbf24;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+        /* Scope Info */
+        .scope-info {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+            animation: fadeIn 0.3s ease-out;
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin-bottom 0.3s ease;
+        }
+        .scope-info.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-bottom: 0;
+            padding: 0;
+            border: none;
+            overflow: hidden;
+        }
+        .scope-info-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .scope-info-title::before {
+            content: "📍";
+            font-size: 1.1rem;
+        }
+        .scope-coordinates {
+            font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .scope-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .scope-area-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #fbbf24;
+        }
+        /* Taxi Stand Filter */
+        .taxi-filter {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(249, 115, 22, 0.3);
+            margin-bottom: 20px;
+        }
+        .filter-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-title::before {
+            content: "🔍";
+            font-size: 1.1rem;
+        }
+        .filter-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .filter-group {
+            display: flex;
+            gap: 10px;
+        }
+        .filter-select {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: white;
+            font-size: 0.9rem;
+            backdrop-filter: blur(4px);
+            cursor: pointer;
+        }
+        .filter-select option {
+            background: #f97316;
+            color: white;
+        }
+        .filter-input {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: white;
+            font-size: 0.9rem;
+            width: 100%;
+            backdrop-filter: blur(4px);
+        }
+        .filter-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #f97316;
+            border: none;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .filter-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+        }
+        .filter-btn.secondary {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        .filter-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 30px 16px;
+            color: #9ca3af;
+            background: rgba(249, 250, 251, 0.8);
+            border-radius: 10px;
+            border: 2px dashed #d1d5db;
+        }
+        .empty-state::before {
+            content: "⬇️";
+            font-size: 1.5rem;
+            display: block;
+            margin-bottom: 12px;
+        }
+        .empty-state p {
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        /* Custom Clear All Button */
+        .clear-all-btn {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            z-index: 1000;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .clear-all-btn.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .clear-all-btn:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+        }
+        .clear-all-btn:active {
+            transform: translateY(0);
+        }
+        /* Taxi Toggle Button */
+        .taxi-toggle-btn {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        .taxi-toggle-btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+        .taxi-toggle-btn:active {
+            transform: translateY(0);
+        }
+        /* Mobile Toggle Button */
+        .mobile-toggle {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1001;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 10px 14px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #4f46e5;
+        }
+        /* Panel Close Button - Inside panel */
+        .panel-close-btn {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            align-items: center;
+            gap: 6px;
+            z-index: 1002;
+        }
+        /* Panel Overlay */
+        .panel-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1998;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .panel-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.875rem;
+            padding: 20px;
+            margin-top: auto;
+        }
+        /* Marker Cluster Styles */
+        .marker-cluster-small {
+            background-color: rgba(16, 185, 129, 0.6);
+        }
+        .marker-cluster-small div {
+            background-color: rgba(16, 185, 129, 0.9);
+        }
+        .marker-cluster-medium {
+            background-color: rgba(59, 130, 246, 0.6);
+        }
+        .marker-cluster-medium div {
+            background-color: rgba(59, 130, 246, 0.9);
+        }
+        .marker-cluster-large {
+            background-color: rgba(239, 68, 68, 0.6);
+        }
+        .marker-cluster-large div {
+            background-color: rgba(239, 68, 68, 0.9);
+        }
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 0px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-active {
+            background-color: #10b981;
+            color: white;
+        }
+        .status-inactive {
+            background-color: #6b7280;
+            color: white;
+        }
+        .status-planned {
+            background-color: #f59e0b;
+            color: white;
+        }
+        .status-under-construction {
+            background-color: #8b5cf6;
+            color: white;
+        }
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+                background: #4f46e5;
+            }
+            .container {
+                gap: 16px;
+            }
+            .header {
+                padding: 16px;
+                border-radius: 12px;
+            }
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            .map-container {
+                height: 400px;
+                border-radius: 12px;
+            }
+            
+            /* 重新設計控制面板為全屏側滑面板 */
+            .map-control-panel {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                max-width: 100%;
+                max-height: 100%;
+                border-radius: 0;
+                z-index: 2000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                overflow-y: auto;
+                padding: 60px 20px 20px 20px;
+                width: 85%;
+                max-width: 400px;
+                background: rgba(255, 255, 255, 0.98);
+                backdrop-filter: blur(20px);
+                box-shadow: 5px 0 25px rgba(0, 0, 0, 0.2);
+            }
+            
+            .map-control-panel.mobile-visible {
+                transform: translateX(0);
+            }
+            
+            /* 修改 mobile-toggle 為固定位置 */
+            .mobile-toggle {
+                display: block;
+                z-index: 2001; /* 高於控制面板 */
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 8px;
+                padding: 12px 16px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                cursor: pointer;
+                font-size: 1rem;
+                font-weight: 600;
+                color: #4f46e5;
+            }
+            
+            /* 顯示面板內的關閉按鈕 */
+            .panel-close-btn {
+                display: flex;
+            }
+            
+            .instructions p {
+                font-size: 0.85rem;
+                padding-left: 16px;
+            }
+            .scope-coordinates {
+                font-size: 0.75rem;
+                padding: 10px;
+            }
+            .scope-area-value {
+                font-size: 1rem;
+            }
+            .clear-all-btn, .taxi-toggle-btn {
+                bottom: 50px;
+                left: 10px;
+                padding: 12px 20px;
+                font-size: 1rem;
+            }
+            .taxi-toggle-btn {
+                bottom: 10px;
+            }
+            .filter-group {
+                flex-direction: column;
+            }
+            .stands-stats {
+                flex-direction: column;
+                gap: 8px;
+            }
+            .stat-item {
+                min-width: 100%;
+            }
+            /* Adjust Leaflet controls */
+            .leaflet-top.leaflet-left {
+                top: 50px !important;
+            }
+            .leaflet-bottom.leaflet-left {
+                bottom: 40px !important;
+            }
+        }
+        /* Desktop Enhancements */
+        @media (min-width: 769px) {
+            /* 在桌面設備隱藏 overlay 和關閉按鈕 */
+            .panel-overlay {
+                display: none !important;
+            }
+            .panel-close-btn {
+                display: none !important;
+            }
+            .mobile-toggle {
+                display: none !important;
+            }
+        }
+        @media (min-width: 1200px) {
+            .map-container {
+                height: 600px;
+            }
+        }
+        /* Leaflet Customizations */
+        .leaflet-control-layers {
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+        /* Hide zoom control from topleft */
+        .leaflet-control-zoom {
+            display: none !important;
+        }
+        /* Smooth Transitions */
+        * {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>香港的士站位置地圖</h1>
+            <div class="subtitle">查找香港全境的士站位置，包括詳細狀態、地區和位置資訊</div>
+        </header>
+        <main class="main-content">
+            <section class="map-container">
+                <div class="mobile-toggle" id="mobile-toggle">
+                    <i class="fas fa-bars"></i> 控制面板
+                </div>
+                <div id="map"></div>
+                <!-- Taxi Toggle Button -->
+                <button id="taxi-toggle-btn" class="taxi-toggle-btn">
+                    <i class="fas fa-taxi"></i> 切換的士站顯示
+                </button>
+                <!-- Clear All Button -->
+                <button id="clear-all-btn" class="clear-all-btn">
+                    <i class="fas fa-trash-alt"></i> 清除所有範圍
+                </button>
+                <aside class="map-control-panel" id="control-panel">
+                    <!-- Panel Close Button for Mobile -->
+                    <button class="panel-close-btn" id="panel-close-btn">
+                        <i class="fas fa-times"></i> 關閉
+                    </button>
+                    <div class="control-section">
+                        <h2 class="panel-title" id="instructions-toggle">
+                            使用指引
+                            <span class="instructions-collapse" id="collapse-icon-instructions">
+                                <i class="fas fa-caret-down"></i>
+                            </span>
+                        </h2>
+                        <div class="instructions" id="instructions">
+                            <p><strong>繪製範圍：</strong>點擊矩形工具（左下角），然後在地圖上點擊並拖動</p>
+                            <p><strong>刪除範圍：</strong>點擊「清除所有範圍」按鈕（左下角）以移除矩形</p>
+                            <p><strong>的士站：</strong>顯示全港的士站位置，點擊圖標查看詳情</p>
+                            <p><strong>狀態標示：</strong>綠色=運作中，灰色=暫停服務，黃色=規劃中，紫色=興建中</p>
+                            <p><strong>篩選功能：</strong>可依地區、區域或狀態篩選的士站</p>
+                        </div>
+                    </div>
+                    <div class="control-section">
+                        <h2 class="panel-title" id="taxi-stands-toggle">
+                            的士站資訊
+                            <span class="scope-info-collapse" id="collapse-icon-taxi-stands">
+                                <i class="fas fa-caret-down"></i>
+                            </span>
+                        </h2>
+                        <div id="taxi-stands-info" class="taxi-stands-info">
+                            <div class="taxi-stands-title">香港的士站數據</div>
+                            <div class="stands-count" id="total-stands">載入中...</div>
+                            <div class="stands-stats" id="stands-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value" id="active-stands">--</div>
+                                    <div class="stat-label">運作中</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="district-count">--</div>
+                                    <div class="stat-label">區域數</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="region-count">--</div>
+                                    <div class="stat-label">地區數</div>
+                                </div>
+                            </div>
+                            <div class="stands-details" id="stands-details">
+                                正在從政府數據中心加載的士站資訊...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-section">
+                        <div class="taxi-filter">
+                            <div class="filter-title">篩選的士站</div>
+                            <div class="filter-controls">
+                                <div class="filter-group">
+                                    <select id="filter-region" class="filter-select">
+                                        <option value="">全部地區</option>
+                                    </select>
+                                    <select id="filter-district" class="filter-select">
+                                        <option value="">全部區域</option>
+                                    </select>
+                                </div>
+                                <input type="text" id="search-stands" class="filter-input" placeholder="輸入關鍵字搜尋...">
+                                <div class="filter-group">
+                                    <button id="search-btn" class="filter-btn">
+                                        <i class="fas fa-search"></i> 搜尋
+                                    </button>
+                                    <button id="reset-btn" class="filter-btn secondary">
+                                        <i class="fas fa-redo"></i> 重置
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+                <!-- Panel Overlay for Mobile -->
+                <div class="panel-overlay" id="panel-overlay"></div>
+            </section>
+        </main>
+        <footer class="footer">
+            <p>香港的士站位置地圖 | 數據來源：香港政府數據中心 | 更新時間: <span id="data-timestamp">--</span></p>
+        </footer>
+    </div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script>
+        window.__gc__ = {
+            DEFAULT: {
+                COORDINATE: {
+                    lat: 22.3023,
+                    lng: 114.1745,
+                    zoom: 15
+                }
+            }
+        };
+        
+        // 初始化地圖，移除預設縮放控制
+        const map = L.map('map', {
+            zoomControl: false, // 移除預設縮放控制
+            attributionControl: true
+        }).setView(
+            [
+                window.__gc__.DEFAULT.COORDINATE.lat,
+                window.__gc__.DEFAULT.COORDINATE.lng
+            ],
+            window.__gc__.DEFAULT.COORDINATE.zoom
+        ); // 預設中心為香港
+        
+        // 添加自定義縮放控制至左下角
+        L.control.zoom({
+            position: 'bottomleft'
+        }).addTo(map);
+        
+        // 添加地圖圖層
+        const tileLayers = {
+            "開放街道地圖": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19,
+                subdomains: ['a', 'b', 'c']
+            }),
+            "衛星圖像": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
+                maxZoom: 19
+            }),
+            "地形圖": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenTopoMap',
+                maxZoom: 17
+            })
+        };
+        
+        // 添加預設地圖圖層
+        tileLayers["開放街道地圖"].addTo(map);
+        
+        // 添加圖層控制至左上角
+        L.control.layers(tileLayers, null, {
+            collapsed: true,
+            position: 'topleft'
+        }).addTo(map);
+        
+        // 初始化標記群組
+        const taxiMarkers = L.markerClusterGroup({
+            chunkedLoading: true,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            maxClusterRadius: 50,
+            iconCreateFunction: function(cluster) {
+                const count = cluster.getChildCount();
+                let size = 'small';
+                if (count > 20) size = 'large';
+                else if (count > 5) size = 'medium';
+                
+                return L.divIcon({
+                    html: `<div><span>${count}</span></div>`,
+                    className: `marker-cluster marker-cluster-${size}`,
+                    iconSize: L.point(40, 40)
+                });
+            }
+        });
+        
+        // 添加的士站標記圖層
+        map.addLayer(taxiMarkers);
+        
+        // 追蹤當前範圍
+        let currentScope = null;
+        let taxiStandsData = [];
+        let taxiStandsVisible = true;
+        let allRegions = new Set();
+        let allDistricts = new Set();
+        let statusStats = {
+            '運作中': 0,
+            '暫停服務': 0,
+            '規劃中': 0,
+            '興建中': 0,
+            '其他': 0
+        };
+        
+        // 獲取 UI 元素
+        const clearAllBtn = document.getElementById('clear-all-btn');
+        const taxiToggleBtn = document.getElementById('taxi-toggle-btn');
+        const searchStandsInput = document.getElementById('search-stands');
+        const searchBtn = document.getElementById('search-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const filterRegion = document.getElementById('filter-region');
+        const filterDistrict = document.getElementById('filter-district');
+        const totalStandsElement = document.getElementById('total-stands');
+        const activeStandsElement = document.getElementById('active-stands');
+        const districtCountElement = document.getElementById('district-count');
+        const regionCountElement = document.getElementById('region-count');
+        const standsDetailsElement = document.getElementById('stands-details');
+        const dataTimestampElement = document.getElementById('data-timestamp');
+        
+        // 根據狀態獲取標準化狀態文字
+        function getStandardizedStatus(status) {
+            if (!status || typeof status !== 'string') return '其他';
+            
+            const lowerStatus = status.toLowerCase();
+            if (lowerStatus.includes('運作中') || lowerStatus.includes('啟用中') || lowerStatus.includes('正常')) {
+                return '運作中';
+            } else if (lowerStatus.includes('暫停') || lowerStatus.includes('停用') || lowerStatus.includes('關閉')) {
+                return '暫停服務';
+            } else if (lowerStatus.includes('規劃') || lowerStatus.includes('計劃')) {
+                return '規劃中';
+            } else if (lowerStatus.includes('興建中') || lowerStatus.includes('施工中')) {
+                return '興建中';
+            }
+            return '其他';
+        }
+        
+        // 載入的士站數據
+        async function loadTaxiStands() {
+            try {
+                showNotification('正在加載的士站數據...', 'info');
+                
+                const response = await fetch('https://portal.csdi.gov.hk/server/services/common/td_rcd_1697081907714_17556/MapServer/WFSServer?service=wfs&request=GetFeature&typenames=Taxi_Stands&outputFormat=geojson');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                taxiStandsData = data.features;
+                
+                // 清除現有標記
+                taxiMarkers.clearLayers();
+                
+                // 重置統計數據
+                allRegions.clear();
+                allDistricts.clear();
+                statusStats = {
+                    '運作中': 0,
+                    '暫停服務': 0,
+                    '規劃中': 0,
+                    '興建中': 0,
+                    '其他': 0
+                };
+                
+                // 為每個的士站添加標記
+                taxiStandsData.forEach(function(feature) {
+                    const coords = feature.geometry.coordinates;
+                    const properties = feature.properties;
+                    
+                    // 獲取屬性值
+                    const status = properties.Status_TC || '未知狀態';
+                    const region = properties.Region_TC || '未知地區';
+                    const district = properties.District_TC || '未知區域';
+                    const location = properties.Location_TC || '未知位置';
+                    
+                    // 收集所有地區和區域
+                    if (region && region !== '未知地區') {
+                        allRegions.add(region);
+                    }
+                    if (district && district !== '未知區域') {
+                        allDistricts.add(district);
+                    }
+                    
+                    // 統計狀態
+                    const standardizedStatus = getStandardizedStatus(status);
+                    statusStats[standardizedStatus]++;
+                    
+                    // 獲取對應的顏色和圖標
+                    const statusIcon = '📍';
+                    
+                    // 創建自定義圖標
+                    const taxiIcon = L.divIcon({
+                        html: `<div style="font-size: 20px;">${statusIcon}</div>`,
+                        className: 'taxi-marker',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 24],
+                        popupAnchor: [0, -24]
+                    });
+                    
+                    // 創建標記
+                    const marker = L.marker([coords[1], coords[0]], { 
+                        icon: taxiIcon,
+                        properties: properties
+                    });
+                    
+                    // 創建彈出視窗內容
+                    let popupContent = '<div style="min-width: 220px;">';                   
+                    if (location && location !== '未知位置') {
+                        popupContent += `<p style="margin: 0 0 5px 0; font-weight: bold; color: #4f46e5;">${location}</p>`;
+                    }
+                    
+                    if (status && status !== '未知狀態') {
+                        popupContent += `<p style="margin: 0 0 5px 0;"><strong>類別：</strong>`;
+                        popupContent += `<span class="status-badge">${status}</span></p>`;
+                    }
+
+                    popupContent += `<p style="margin: 0 0 5px 0;"><strong>地區：</strong>${region}（${district}）</p>`;
+
+                    // 顯示其他有用的屬性
+                    if (properties.ObjectId) {
+                        popupContent += `<p style="margin: 0 0 5px 0;"><strong>編號：</strong>${properties.ObjectId}</p>`;
+                    }
+                    
+                    if (properties.TaxiStandID) {
+                        popupContent += `<p style="margin: 0 0 5px 0;"><strong>站點ID：</strong>${properties.TaxiStandID}</p>`;
+                    }
+                    
+                    // 添加查看按鈕
+                    popupContent += '<button onclick="zoomToMarker(' + coords[1] + ',' + coords[0] + ')" style="background: #4f46e5; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 10px;">放大查看</button>';
+                    
+                    popupContent += '</div>';
+                    
+                    marker.bindPopup(popupContent);
+                    taxiMarkers.addLayer(marker);
+                });
+                
+                // 更新篩選器選項
+                updateFilterOptions();
+                
+                // 更新資訊面板
+                updateTaxiStandsInfo();
+                
+                // 更新時間戳記
+                const now = new Date();
+                dataTimestampElement.textContent = now.toLocaleDateString('zh-HK') + ' ' + now.toLocaleTimeString('zh-HK');
+                
+                showNotification(`已加載 ${taxiStandsData.length} 個的士站位置`, 'success');
+                
+            } catch (error) {
+                console.error('Error loading taxi stands data:', error);
+                showNotification('加載的士站數據失敗，請稍後再試', 'error');
+                
+                // 顯示錯誤訊息
+                totalStandsElement.textContent = '數據載入失敗';
+                standsDetailsElement.textContent = '無法從政府數據中心獲取的士站資訊。';
+            }
+        }
+        
+        // 更新篩選器選項
+        function updateFilterOptions() {
+            // 更新地區篩選器
+            filterRegion.innerHTML = '<option value="">全部地區</option>';
+            Array.from(allRegions).sort().forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                filterRegion.appendChild(option);
+            });
+            
+            // 更新區域篩選器
+            filterDistrict.innerHTML = '<option value="">全部區域</option>';
+            Array.from(allDistricts).sort().forEach(district => {
+                const option = document.createElement('option');
+                option.value = district;
+                option.textContent = district;
+                filterDistrict.appendChild(option);
+            });
+        }
+        
+        // 更新的士站資訊顯示
+        function updateTaxiStandsInfo() {
+            const totalStands = taxiStandsData.length;
+            totalStandsElement.textContent = `${totalStands} 個的士站`;
+            
+            // 更新統計數據
+            activeStandsElement.textContent = statusStats['運作中'];
+            districtCountElement.textContent = allDistricts.size;
+            regionCountElement.textContent = allRegions.size;
+            
+            // 分析數據
+            let regionDistribution = {};
+            let districtDistribution = {};
+            
+            taxiStandsData.forEach(function(feature) {
+                const properties = feature.properties;
+                const region = properties.Region_TC || '未知地區';
+                const district = properties.District_TC || '未知區域';
+                const status = properties.Status_TC || '未知狀態';
+                
+                // 統計地區分佈
+                if (!regionDistribution[region]) {
+                    regionDistribution[region] = 0;
+                }
+                regionDistribution[region]++;
+                
+                // 統計區域分佈
+                if (!districtDistribution[district]) {
+                    districtDistribution[district] = 0;
+                }
+                districtDistribution[district]++;
+            });
+            
+            // 排序地區和區域
+            const sortedRegions = Object.entries(regionDistribution).sort((a, b) => b[1] - a[1]);
+            const sortedDistricts = Object.entries(districtDistribution).sort((a, b) => b[1] - a[1]);
+            
+            let detailsHtml = '';
+            
+            // 顯示狀態統計
+            detailsHtml += '<strong>狀態分佈：</strong><br>';
+            Object.entries(statusStats).forEach(([status, count]) => {
+                if (count > 0) {
+                    detailsHtml += `${status}: ${count} 個<br>`;
+                }
+            });
+            
+            detailsHtml += '<br><strong>主要地區分佈：</strong><br>';
+            
+            // 顯示前5個地區
+            sortedRegions.slice(0, 5).forEach(([region, count]) => {
+                detailsHtml += `${region}: ${count} 個站點<br>`;
+            });
+            
+            if (sortedRegions.length > 5) {
+                detailsHtml += `... 及其他 ${sortedRegions.length - 5} 個地區<br>`;
+            }
+            
+            // 顯示前5個區域
+            detailsHtml += '<br><strong>主要區域分佈：</strong><br>';
+            sortedDistricts.slice(0, 5).forEach(([district, count]) => {
+                detailsHtml += `${district}: ${count} 個站點<br>`;
+            });
+            
+            if (sortedDistricts.length > 5) {
+                detailsHtml += `... 及其他 ${sortedDistricts.length - 5} 個區域`;
+            }
+            
+            standsDetailsElement.innerHTML = detailsHtml;
+        }
+        
+        // 根據篩選條件顯示的士站
+        function filterAndDisplayTaxiStands() {
+            const selectedRegion = filterRegion.value;
+            const selectedDistrict = filterDistrict.value;
+            const searchTerm = searchStandsInput.value.trim().toLowerCase();
+            
+            // 清除所有現有標記
+            taxiMarkers.clearLayers();
+            
+            // 篩選數據
+            const filteredStands = taxiStandsData.filter(function(feature) {
+                const properties = feature.properties;
+                const status = properties.Status_TC || '';
+                const region = properties.Region_TC || '';
+                const district = properties.District_TC || '';
+                const location = properties.Location_TC || '';
+                
+                // 轉換為標準化狀態
+                const standardizedStatus = getStandardizedStatus(status);
+                
+                // 應用篩選條件
+                let matches = true;
+                
+                // 地區篩選
+                if (selectedRegion && region !== selectedRegion) {
+                    matches = false;
+                }
+                
+                // 區域篩選
+                if (selectedDistrict && district !== selectedDistrict) {
+                    matches = false;
+                }
+                
+                // 關鍵字搜尋
+                if (searchTerm && 
+                    !location.toLowerCase().includes(searchTerm) && 
+                    !region.toLowerCase().includes(searchTerm) && 
+                    !district.toLowerCase().includes(searchTerm)) {
+                    matches = false;
+                }
+                
+                return matches;
+            });
+            
+            // 顯示篩選結果
+            filteredStands.forEach(function(feature) {
+                const coords = feature.geometry.coordinates;
+                const properties = feature.properties;
+                const status = properties.Status_TC || '未知狀態';
+                const statusIcon = '📍';
+                
+                // 創建自定義圖標
+                const taxiIcon = L.divIcon({
+                    html: `<div style="font-size: 20px;">${statusIcon}</div>`,
+                    className: 'taxi-marker',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 24],
+                    popupAnchor: [0, -24]
+                });
+                
+                const marker = L.marker([coords[1], coords[0]], { 
+                    icon: taxiIcon,
+                    properties: properties
+                });
+                
+                // 創建彈出視窗內容
+                let popupContent = '<div style="min-width: 220px;">';
+                if (properties.Location_TC && properties.Location_TC !== '未知位置') {
+                    popupContent += `<p style="margin: 0 0 5px 0; font-weight: bold; color: #4f46e5;">${properties.Location_TC}</p>`;
+                }
+                
+                if (status && status !== '未知狀態') {
+                    popupContent += `<p style="margin: 0 0 5px 0;"><strong>類別：</strong>`;
+                    popupContent += `<span class="status-badge">${status}</span></p>`;
+                }
+                popupContent += `<p style="margin: 0 0 5px 0;"><strong>地區：</strong>${properties.Region_TC}（${properties.District_TC}）</p>`;
+                
+                // 高亮顯示搜索詞
+                if (searchTerm) {
+                    popupContent += '<p style="margin: 10px 0 5px 0; padding: 5px; background: #fef3c7; border-radius: 4px;">';
+                    popupContent += `<strong>匹配關鍵字：</strong>${searchTerm}`;
+                    popupContent += '</p>';
+                }
+                
+                popupContent += '<button onclick="zoomToMarker(' + coords[1] + ',' + coords[0] + ')" style="background: #4f46e5; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 10px;">放大查看</button>';
+                popupContent += '</div>';
+                
+                marker.bindPopup(popupContent);
+                taxiMarkers.addLayer(marker);
+            });
+            
+            // 如果有結果，調整地圖視圖
+            if (filteredStands.length > 0) {
+                const bounds = L.latLngBounds(filteredStands.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+                map.fitBounds(bounds, { padding: [50, 50] });
+                showNotification(`找到 ${filteredStands.length} 個的士站`, 'success');
+            } else {
+                showNotification('未找到符合條件的的士站', 'info');
+            }
+            
+            // 更新計數器
+            updateFilteredCount(filteredStands.length);
+        }
+        
+        // 更新篩選計數器
+        function updateFilteredCount(count) {
+            const totalCount = taxiStandsData.length;
+            totalStandsElement.textContent = `${count} / ${totalCount} 個的士站`;
+        }
+        
+        // 全局函數：縮放到標記
+        window.zoomToMarker = function(lat, lng) {
+            map.setView([lat, lng], 18);
+            L.popup()
+                .setLatLng([lat, lng]);
+        };
+        
+        // 切換的士站顯示
+        taxiToggleBtn.addEventListener('click', function() {
+            taxiStandsVisible = !taxiStandsVisible;
+            
+            if (taxiStandsVisible) {
+                map.addLayer(taxiMarkers);
+                taxiToggleBtn.innerHTML = '<i class="fas fa-taxi"></i> 隱藏的士站';
+                showNotification('已顯示的士站標記', 'success');
+            } else {
+                map.removeLayer(taxiMarkers);
+                taxiToggleBtn.innerHTML = '<i class="fas fa-taxi"></i> 顯示的士站';
+                showNotification('已隱藏的士站標記', 'info');
+            }
+        });
+        
+        // 篩選器事件監聽
+        filterRegion.addEventListener('change', filterAndDisplayTaxiStands);
+        filterDistrict.addEventListener('change', filterAndDisplayTaxiStands);
+        
+        // 搜索按鈕事件
+        searchBtn.addEventListener('click', filterAndDisplayTaxiStands);
+        
+        // Enter 鍵搜索
+        searchStandsInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                filterAndDisplayTaxiStands();
+            }
+        });
+        
+        // 重置按鈕事件
+        resetBtn.addEventListener('click', function() {
+            filterRegion.value = '';
+            filterDistrict.value = '';
+            searchStandsInput.value = '';
+            
+            // 重新顯示所有標記
+            filterAndDisplayTaxiStands();
+            
+            // 重置計數器
+            updateTaxiStandsInfo();
+            
+            showNotification('已重置所有篩選條件', 'info');
+        });
+        
+        // 清除所有範圍按鈕功能
+        clearAllBtn.addEventListener('click', function () {
+            // 清除所有繪製項目
+            currentScope = null;
+            
+            // 更新 UI
+            const scopeInfo = document.getElementById('scope-info');
+            const emptyState = document.getElementById('empty-state');
+            scopeInfo.style.display = 'none';
+            scopeInfo.classList.remove('collapsed');
+            document.getElementById('collapse-icon-scope-info').classList.remove('collapsed');
+            document.getElementById('collapse-icon-scope-info').innerHTML = '<i class="fas fa-caret-down"></i>';
+            emptyState.style.display = 'block';
+            
+            // 隱藏清除按鈕
+            clearAllBtn.classList.remove('visible');
+            
+            // 顯示反饋訊息
+            showNotification('矩形範圍已成功清除！', 'success');
+        });
+        
+        // 顯示通知功能
+        function showNotification(message, type = 'info') {
+            // 移除現有通知
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            // 創建通知元素
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            // 設定通知樣式
+            Object.assign(notification.style, {
+                position: 'fixed',
+                bottom: '20px',
+                right: '20px',
+                backgroundColor: type === 'success' ? '#10b981' : '#3b82f6',
+                color: 'white',
+                padding: '12px 20px',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                zIndex: '3000', // 高於所有其他元素
+                animation: 'slideIn 0.3s ease-out'
+            });
+            
+            // 添加到文檔
+            document.body.appendChild(notification);
+            
+            // 3秒後移除
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+            
+            // 添加 CSS 動畫
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // 可摺疊指引功能
+        const instructionsToggle = document.getElementById('instructions-toggle');
+        const instructions = document.getElementById('instructions');
+        const collapseIconInstructions = document.getElementById('collapse-icon-instructions');
+        let instructionsCollapsed = false;
+        
+        instructionsToggle.addEventListener('click', () => {
+            instructionsCollapsed = !instructionsCollapsed;
+            instructions.classList.toggle('collapsed', instructionsCollapsed);
+            collapseIconInstructions.classList.toggle('collapsed', instructionsCollapsed);
+            collapseIconInstructions.innerHTML = instructionsCollapsed ?
+                '<i class="fas fa-caret-right"></i>' :
+                '<i class="fas fa-caret-down"></i>';
+        });
+        
+        // 的士站資訊摺疊功能
+        const taxiStandsToggle = document.getElementById('taxi-stands-toggle');
+        const taxiStandsInfo = document.getElementById('taxi-stands-info');
+        const collapseIconTaxiStands = document.getElementById('collapse-icon-taxi-stands');
+        let taxiStandsCollapsed = false;
+        
+        taxiStandsToggle.addEventListener('click', () => {
+            taxiStandsCollapsed = !taxiStandsCollapsed;
+            taxiStandsInfo.classList.toggle('collapsed', taxiStandsCollapsed);
+            collapseIconTaxiStands.classList.toggle('collapsed', taxiStandsCollapsed);
+            collapseIconTaxiStands.innerHTML = taxiStandsCollapsed ?
+                '<i class="fas fa-caret-right"></i>' :
+                '<i class="fas fa-caret-down"></i>';
+        });
+        
+        // 範圍資訊摺疊功能
+        const scopeInfo = document.getElementById('scope-info');
+        const emptyState = document.getElementById('empty-state');
+        const collapseIconScopeInfo = document.getElementById('collapse-icon-scope-info');
+        let scopeInfoCollapsed = false;
+        
+        // 流動裝置控制面板功能
+        const mobileToggle = document.getElementById('mobile-toggle');
+        const controlPanel = document.getElementById('control-panel');
+        const panelOverlay = document.getElementById('panel-overlay');
+        const panelCloseBtn = document.getElementById('panel-close-btn');
+        let panelVisible = window.innerWidth > 768; // 桌面裝置預設顯示
+        
+        // 初始化面板狀態
+        if (window.innerWidth <= 768) {
+            controlPanel.classList.remove('mobile-visible');
+            panelVisible = false;
+            panelOverlay.classList.remove('visible');
+        }
+        
+        // 切換面板顯示/隱藏
+        function togglePanel() {
+            panelVisible = !panelVisible;
+            controlPanel.classList.toggle('mobile-visible', panelVisible);
+            panelOverlay.classList.toggle('visible', panelVisible);
+            
+            // 在流動裝置上，更新 mobile-toggle 文字
+            if (window.innerWidth <= 768) {
+                mobileToggle.innerHTML = '<i class="fas fa-bars"></i> 控制面板';
+                if(panelVisible) {
+                    mobileToggle.classList.add("element-hidden");
+                } else {
+                    mobileToggle.classList.remove("element-hidden");
+                }
+            }
+        }
+        
+        // mobile-toggle 點擊事件
+        mobileToggle.addEventListener('click', togglePanel);
+        
+        // 面板內的關閉按鈕點擊事件
+        panelCloseBtn.addEventListener('click', () => {
+            panelVisible = false;
+            controlPanel.classList.remove('mobile-visible');
+            panelOverlay.classList.remove('visible');
+            mobileToggle.classList.remove("element-hidden");
+        });
+        
+        // 計算面積（平方公里）
+        function calculateArea(bounds) {
+            const latDiff = Math.abs(bounds.getNorth() - bounds.getSouth());
+            const lngDiff = Math.abs(bounds.getEast() - bounds.getWest());
+            // 近似轉換（1度 ≈ 111.32 公里於赤道）
+            const latKm = latDiff * 111.32;
+            const lngKm = lngDiff * 111.32 * Math.cos((bounds.getNorth() + bounds.getSouth()) * Math.PI / 360);
+            const area = latKm * lngKm;
+            if (area > 1000000) {
+                return `${(area / 1000000).toFixed(1)}百萬平方公里`;
+            } else if (area > 1000) {
+                return `${(area / 1000).toFixed(1)}千平方公里`;
+            } else {
+                return `${area.toFixed(2)} 平方公里`;
+            }
+        }
+        
+        // 更新範圍資訊顯示
+        function updateScopeInfo(bounds) {
+            const scopeInfo = document.getElementById('scope-info');
+            const emptyState = document.getElementById('empty-state');
+            const coordinates = document.getElementById('scope-coordinates');
+            const areaValue = document.getElementById('scope-area-value');
+            
+            const north = bounds.getNorth().toFixed(4);
+            const south = bounds.getSouth().toFixed(4);
+            const east = bounds.getEast().toFixed(4);
+            const west = bounds.getWest().toFixed(4);
+            
+            coordinates.innerHTML = `
+                北界: <strong>${north}°</strong><br>
+                南界: <strong>${south}°</strong><br>
+                東界: <strong>${east}°</strong><br>
+                西界: <strong>${west}°</strong>
+            `;
+            
+            areaValue.textContent = calculateArea(bounds);
+            scopeInfo.style.display = 'block';
+            scopeInfo.classList.remove('collapsed');
+            document.getElementById('collapse-icon-scope-info').classList.remove('collapsed');
+            document.getElementById('collapse-icon-scope-info').innerHTML = '<i class="fas fa-caret-down"></i>';
+            scopeInfoCollapsed = false;
+            emptyState.style.display = 'none';
+            
+            // 顯示清除按鈕
+            clearAllBtn.classList.add('visible');
+            
+            // 在流動裝置選擇範圍時自動顯示面板
+            if (window.innerWidth <= 768 && !panelVisible) {
+                togglePanel();
+            }
+        }
+        
+        // 為流動裝置優化
+        function optimizeForMobile() {
+            const isMobile = window.innerWidth <= 768;
+            if (isMobile) {
+                // 流動裝置優化
+                const instructionsP = document.querySelectorAll('.instructions p');
+                if (instructionsP.length >= 5) {
+                    instructionsP[0].innerHTML = '<strong>繪製範圍：</strong>點擊矩形工具（左下角），然後在地圖上拖動';
+                    instructionsP[1].innerHTML = '<strong>刪除範圍：</strong>點擊「清除所有範圍」按鈕（左下角）';
+                    instructionsP[2].innerHTML = '<strong>的士站：</strong>顯示全港的士站位置';
+                    instructionsP[3].innerHTML = '<strong>狀態標示：</strong>不同顏色表示不同狀態';
+                    instructionsP[4].innerHTML = '<strong>篩選功能：</strong>可篩選地區、區域或狀態';
+                }
+                
+                // 確保面板在流動裝置上初始狀態正確
+                controlPanel.classList.remove('mobile-visible');
+                panelOverlay.classList.remove('visible');
+                panelVisible = false;
+            } else {
+                // 桌面指引
+                const instructionsP = document.querySelectorAll('.instructions p');
+                if (instructionsP.length >= 5) {
+                    instructionsP[0].innerHTML = '<strong>繪製範圍：</strong>點擊矩形工具（左下角），然後點擊並拖動';
+                    instructionsP[1].innerHTML = '<strong>刪除範圍：</strong>點擊「清除所有範圍」按鈕（左下角）';
+                    instructionsP[2].innerHTML = '<strong>的士站：</strong>顯示全港的士站位置，點擊圖標查看詳情';
+                    instructionsP[3].innerHTML = '<strong>狀態標示：</strong>綠色=運作中，灰色=暫停服務，黃色=規劃中，紫色=興建中';
+                    instructionsP[4].innerHTML = '<strong>篩選功能：</strong>可依地區、區域或狀態篩選的士站';
+                }
+                
+                // 確保面板在桌面上始終顯示
+                controlPanel.classList.add('mobile-visible');
+                panelVisible = true;
+            }
+            
+            // 確保地圖正確渲染
+            setTimeout(() => map.invalidateSize(), 100);
+        }
+        
+        // 初始化
+        window.addEventListener('load', () => {
+            optimizeForMobile();
+            
+            // 載入的士站數據
+            loadTaxiStands();
+            
+            // 為首次使用者顯示歡迎訊息
+            if (!localStorage.getItem('mapScopeTutorialShown')) {
+                setTimeout(() => {
+                    alert("歡迎使用香港的士站位置地圖！\n\n• 地圖上顯示了全香港的士站位置\n• 的士站圖標顏色代表不同狀態：\n  🟢 綠色 = 運作中\n  ⚫ 灰色 = 暫停服務\n  🟡 黃色 = 規劃中\n  🟣 紫色 = 興建中\n• 使用篩選功能查找特定地區或狀態的士站\n• 點擊的士站圖標查看詳細資訊");
+                    localStorage.setItem('mapScopeTutorialShown', 'true');
+                }, 1000);
+            }
+        });
+        
+        // 處理視窗大小調整
+        window.addEventListener('resize', () => {
+            optimizeForMobile();
+        });
+    </script>
+</body>
+</html>
